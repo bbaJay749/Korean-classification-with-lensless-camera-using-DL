@@ -14,10 +14,11 @@ from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_a
 from keras.models import Model
 from keras.layers import Input, Conv2D, BatchNormalization, Activation, Subtract, Add, UpSampling2D, MaxPooling2D, Dense, Dropout, Flatten
 from keras.optimizers import SGD, Adam
-from keras.callbacks import ModelCheckpoint, EarlyStopping
+from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 from keras.utils import to_categorical
 
 train_input_directory = 'D:/lenless_data/PHD-08/averaged_data/train/'
+val_input_directory = 'D:/lenless_data/PHD-08/averaged_data/val/'
 test_input_directory = 'D:/lenless_data/PHD-08/averaged_data/test/'
 
 input_image_size = 224
@@ -26,23 +27,33 @@ EPOCHS = 150
 random.seed(3)
 
 train_datagen = ImageDataGenerator(rescale=1./255, 
-                                  rotation_range=15,
-                                  width_shift_range=0.1,
-                                  height_shift_range=0.1,
-                                  shear_range=0.2,
-                                  zoom_range=[1.0, 1.3],
-                                  brightness_range = [0.8, 1.5],
-                                  fill_mode='nearest'
+#                                  rotation_range=5,
+#                                  width_shift_range=0.1,
+#                                  height_shift_range=0.1,
+#                                  shear_range=0.2,
+#                                  zoom_range=[1.0, 1.3],
+#                                  brightness_range = [0.8, 1.5],
+#                                  fill_mode='nearest'
                                   )
 
 validation_gen = ImageDataGenerator(rescale=1./255, 
-                                  rotation_range=15,
-                                  width_shift_range=0.1,
-                                  height_shift_range=0.1,
-                                  shear_range=0.2,
-                                  zoom_range=[1.0, 1.3],
-                                  brightness_range = [0.8, 1.5],
-                                  fill_mode='nearest'
+#                                  rotation_range=15,
+#                                  width_shift_range=0.1,
+#                                  height_shift_range=0.1,
+#                                  shear_range=0.2,
+#                                  zoom_range=[1.0, 1.3],
+#                                  brightness_range = [0.8, 1.5],
+#                                  fill_mode='nearest'
+                                  )
+
+test_gen = ImageDataGenerator(rescale=1./255, 
+#                                  rotation_range=20,
+                                  width_shift_range=0.08,
+#                                  height_shift_range=0.1,
+#                                  shear_range=10,
+#                                  zoom_range=[0.94, 1.12],
+#                                  brightness_range = [0.30, 1.04],
+#                                  fill_mode='nearest'
                                   )
 
 train_generator = train_datagen.flow_from_directory(
@@ -53,11 +64,18 @@ train_generator = train_datagen.flow_from_directory(
         class_mode = 'categorical')
 
 validation_generator = validation_gen.flow_from_directory(
+        val_input_directory,
+        target_size=(input_image_size, input_image_size),
+        batch_size=BATCH_SIZE,
+        color_mode='grayscale',
+        class_mode='categorical')
+
+test_generator = test_gen.flow_from_directory(
         test_input_directory,
         target_size=(input_image_size, input_image_size),
         batch_size=BATCH_SIZE,
         color_mode='grayscale',
-        class_mode='categorical') 
+        class_mode='categorical')  
 
 # to check if ImageDataGenerator is ok or not
 #img = load_img('C:/Users/my/Desktop/vangoghmuseum-s0089B1991-800.jpg')  # PIL 이미지
@@ -118,17 +136,19 @@ sgd = SGD(lr=0.001, momentum = 0.9)
 model.compile(optimizer=sgd, loss = 'categorical_crossentropy', metrics=['accuracy'])
 model.summary()
 
-model.load_weights('./lensless_classificaiton_phd08_1000data_가~하_aug_both.h5')
+#model.load_weights('./lensless_classificaiton_phd08_all_data_가~하.h5')
 
-checkpointer = ModelCheckpoint(filepath='./lensless_classificaiton_phd08_1000data_가~하_aug_both.h5', verbose=1, save_best_only = True)
+checkpointer = ModelCheckpoint(filepath='./lensless_classificaiton_phd08_all_data_가~하.h5', verbose=1, save_best_only = True)
+reduceLR = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=10)
+earlystopper = EarlyStopping(monitor='val_loss', patience=20)
 
 hist = model.fit_generator(
         train_generator,
-        steps_per_epoch = 2600, 
+        steps_per_epoch = 331, 
         epochs = 500,
-        callbacks = [checkpointer],
+        callbacks = [checkpointer, reduceLR, earlystopper],
         validation_data = validation_generator,
-        validation_steps = 860)
+        validation_steps = 215)
 
 model.save_weights('lensless_classificaiton_phd08_1000data_가~하_aug_both.h5')
 
@@ -162,11 +182,11 @@ plt.legend(['lr'], loc='upper left')
 plt.show()
 
 print("-- Evaluate --")
-scores = model.evaluate_generator(validation_generator, steps=860)
+scores = model.evaluate_generator(test_generator, steps=215)
 print("%s: %.2f%%" %(model.metrics_names[1], scores[1]*100))
 
 print("-- Predict --")
-output = model.predict_generator(validation_generator, steps=5)
+output = model.predict_generator(test_generator, steps=5)
 np.set_printoptions(formatter={'float': lambda x: "{0:0.3f}".format(x)})
 print(validation_generator.class_indices)
 print(output)
